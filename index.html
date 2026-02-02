@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TV Mode – Corte</title>
+
+  <style>
+    :root {
+      --bg:#000000;
+      --card:#0d1117;
+      --txt:#ffffff;
+      --muted:#9fb0c3;
+      --border:#223247;
+    }
+
+    body {
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background:var(--bg);
+      color:var(--txt);
+    }
+
+    header {
+      display:flex;
+      gap:16px;
+      align-items:baseline;
+      justify-content:space-between;
+      padding:18px 22px;
+      border-bottom:1px solid var(--border);
+    }
+
+    .title { font-size:22px; font-weight:800; }
+    .sub { color:var(--muted); font-size:14px; }
+    .btn {
+      background:#1d2b3a;
+      color:#fff;
+      border:1px solid #2b3e55;
+      padding:8px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      margin-left:10px;
+    }
+
+    .grid {
+      display:grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap:12px;
+      padding:12px 22px;
+    }
+
+    .card {
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:14px;
+      transition: background-color .25s ease, border-color .25s ease;
+    }
+
+    .k {
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:.06em;
+      color:var(--muted);
+    }
+
+    .v {
+      font-size:34px;
+      font-weight:900;
+      margin-top:6px;
+    }
+
+    .s {
+      font-size:13px;
+      color:var(--muted);
+      margin-top:6px;
+    }
+
+    .span2 { grid-column: span 2; }
+    .span3 { grid-column: span 3; }
+    .span6 { grid-column: span 6; }
+
+    /* Charts */
+    canvas { width:100% !important; height:320px !important; }
+    #hourChart { height:340px !important; }
+    #dayChart  { height:280px !important; }
+
+    table {
+      width:100%;
+      border-collapse:collapse;
+      font-size:14px;
+    }
+    th, td {
+      padding:10px 8px;
+      border-bottom:1px solid var(--border);
+    }
+    th { color:var(--muted); text-align:left; font-weight:700; }
+
+    /* ===== ESTADO (TARJETA COMPLETA) ===== */
+    .card.state { }
+    .card.state.verde   { background:#0b6b3a; border-color:#0b6b3a; }
+    .card.state.amarillo{ background:#c27c00; border-color:#c27c00; }
+    .card.state.rojo    { background:#a31717; border-color:#a31717; animation:pulseRed 2s infinite; }
+
+    .card.state .k,
+    .card.state .s { color:#ffffff; opacity:.95; }
+
+    .card.state .v {
+      font-size:52px;
+      color:#ffffff;
+      text-shadow:0 2px 6px rgba(0,0,0,.35);
+      letter-spacing:.04em;
+    }
+
+    @keyframes pulseRed {
+      0%   { background:#a31717; }
+      50%  { background:#c81d1d; }
+      100% { background:#a31717; }
+    }
+
+    /* ===== PROGRESS BAR (minutos corte) ===== */
+    .progress {
+      height:16px;
+      background:#000;
+      border:1px solid var(--border);
+      border-radius:999px;
+      overflow:hidden;
+      margin-top:10px;
+    }
+    .progress-fill {
+      height:100%;
+      width:0%;
+      background:#2b8aeb;
+      transition:width .35s ease;
+    }
+
+    /* ===== RITMO (card coloreada) ===== */
+    #paceCard.ok   { background:#0b6b3a; border-color:#0b6b3a; }
+    #paceCard.warn { background:#c27c00; border-color:#c27c00; }
+    #paceCard.bad  { background:#a31717; border-color:#a31717; }
+
+    #paceCard.ok .k, #paceCard.ok .s, #paceCard.ok .v,
+    #paceCard.warn .k, #paceCard.warn .s, #paceCard.warn .v,
+    #paceCard.bad .k, #paceCard.bad .s, #paceCard.bad .v {
+      color:#ffffff;
+      opacity:.95;
+    }
+
+    /* Forecast card un poco destacada */
+    #forecastCard { border-color:#2b3e55; }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <div>
+    <div class="title">TV Mode – Corte <span id="machine" class="sub"></span></div>
+    <div class="sub">Última actualización: <span id="updated">-</span></div>
+  </div>
+  <div class="sub" style="display:flex; align-items:center; gap:10px;">
+    <div>Auto-refresh: <span id="refreshLbl"></span> • Próximo: <span id="nextIn">-</span>s</div>
+    <button class="btn" id="fsBtn">Pantalla completa</button>
+  </div>
+</header>
+
+<div class="grid">
+  <!-- fila 1 -->
+  <div class="card span2">
+    <div class="k">Placas hoy</div>
+    <div class="v" id="platesToday">-</div>
+    <div class="s">Objetivo: <span id="targetPlates">-</span></div>
+  </div>
+
+  <div class="card span2">
+    <div class="k">Placas última hora</div>
+    <div class="v" id="plates60">-</div>
+    <div class="s">Eventos última hora: <span id="events60">-</span></div>
+  </div>
+
+  <div class="card span2 state" id="stateCard">
+    <div class="k">Estado</div>
+    <div class="v" id="stateText">-</div>
+    <div class="s">Min sin producir: <span id="minsSinceLast">-</span></div>
+  </div>
+
+  <!-- fila 2 -->
+  <div class="card span3">
+    <div class="k">Primer corte</div>
+    <div class="v" id="firstCut">-</div>
+    <div class="s">Demora arranque (vs 07:30): <span id="startDelay">-</span> min</div>
+  </div>
+
+  <div class="card span3">
+    <div class="k">Último corte</div>
+    <div class="v" id="lastCut">-</div>
+    <div class="s">Eventos hoy: <span id="eventsToday">-</span></div>
+  </div>
+
+  <div class="card span3">
+    <div class="k">Minutos de corte (hoy)</div>
+    <div class="v"><span id="cutMinsToday">-</span> <span class="sub">/ 540</span></div>
+    <div class="s">Promedio min/placa: <span id="minPerPlate">-</span></div>
+    <div class="progress"><div class="progress-fill" id="cutFill"></div></div>
+    <div class="s">Utilización corte: <span id="utilPct">-</span>%</div>
+  </div>
+
+  <!-- fila 3 -->
+  <div class="card span3" id="paceCard">
+    <div class="k">Ritmo vs objetivo</div>
+    <div class="v" id="paceValue">-</div>
+    <div class="s">Esperado a esta hora: <span id="expectedPlates">-</span></div>
+  </div>
+
+  <div class="card span3" id="forecastCard">
+    <div class="k">Proyección cierre</div>
+    <div class="v" id="forecastValue">-</div>
+    <div class="s">Si mantenemos el ritmo actual</div>
+  </div>
+
+  <!-- gráfico por hora (ancho completo) -->
+  <div class="card span6">
+    <div class="k">Placas por hora (hoy)</div>
+    <canvas id="hourChart"></canvas>
+  </div>
+
+  <!-- últimos 30 días -->
+  <div class="card span6">
+    <div class="k">Últimos 30 días (placas/día)</div>
+    <canvas id="dayChart"></canvas>
+  </div>
+
+  <!-- tabla últimos cortes -->
+  <div class="card span6">
+    <div class="k">Últimos cortes</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Inicio</th><th>Duración</th><th>Placas</th><th>Programa</th><th>Archivo</th>
+        </tr>
+      </thead>
+      <tbody id="recentBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+
+<script>
+  // ====== CONFIG ======
+  const SUPABASE_URL = "https://qnjizqowddtvzzfillmo.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_Agu_I1nw4mY1qRARQBbaHQ_6lTWsFTh";
+  const MACHINE_ID = "CORTE_1";
+  const REFRESH_SEC = 20;
+  // ====================
+
+  document.getElementById("machine").textContent = `(${MACHINE_ID})`;
+  document.getElementById("refreshLbl").textContent = `${REFRESH_SEC}s`;
+
+  window.sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  function fmtTime(ts) {
+    if (!ts) return "-";
+    const d = new Date(ts);
+    const hh = String(d.getHours()).padStart(2,"0");
+    const mm = String(d.getMinutes()).padStart(2,"0");
+    return `${hh}:${mm}`;
+  }
+  function fmtNum(x, decimals=0) {
+    if (x === null || x === undefined || Number.isNaN(x)) return "-";
+    return Number(x).toFixed(decimals);
+  }
+
+  // ===== Chart plugins =====
+  // Marca el almuerzo desde 12:00 a 12:30 (media barra)
+  const lunchBandPlugin = {
+    id: "lunchBand",
+    beforeDatasetsDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      if (!chartArea) return;
+
+      const labels = chart.data.labels || [];
+      const idx = labels.findIndex(l => l === "12:00");
+      if (idx < 0) return;
+
+      const xScale = scales.x;
+      const x = xScale.getPixelForValue(idx);
+      const nextX = xScale.getPixelForValue(Math.min(idx + 1, labels.length - 1));
+      const w = Math.max(8, (nextX - x) / 2); // 30 min aprox
+
+      ctx.save();
+      ctx.fillStyle = "rgba(255, 210, 106, 0.16)";
+      ctx.fillRect(x, chartArea.top, w, chartArea.bottom - chartArea.top);
+      ctx.restore();
+    }
+  };
+
+  let hourChart = null;
+  let dayChart = null;
+
+  function setStateCard(state) {
+    const card = document.getElementById("stateCard");
+    const text = document.getElementById("stateText");
+
+    card.classList.remove("verde","amarillo","rojo");
+    // mantener clases base
+    if (!state || state === "SIN_DATOS") {
+      text.textContent = "-";
+      return;
+    }
+    if (state === "VERDE") {
+      card.classList.add("verde");
+      text.textContent = "OK";
+    } else if (state === "AMARILLO") {
+      card.classList.add("amarillo");
+      text.textContent = "ATENCIÓN";
+    } else {
+      card.classList.add("rojo");
+      text.textContent = "PARADO";
+    }
+  }
+
+  async function loadKpi() {
+    const { data, error } = await sb.rpc("fn_kpi_live", { p_machine_id: MACHINE_ID });
+    if (error) throw error;
+    return (data && data[0]) ? data[0] : null;
+  }
+  async function loadHourly() {
+    const { data, error } = await sb.rpc("fn_hourly_today", { p_machine_id: MACHINE_ID });
+    if (error) throw error;
+    return data || [];
+  }
+  async function loadDaily() {
+    const { data, error } = await sb.rpc("fn_daily_last", { p_machine_id: MACHINE_ID, p_days: 30 });
+    if (error) throw error;
+    return data || [];
+  }
+  async function loadRecent() {
+    const { data, error } = await sb.rpc("fn_recent_cuts", { p_machine_id: MACHINE_ID, p_limit: 20 });
+    if (error) throw error;
+    return data || [];
+  }
+
+  function renderRecent(rows) {
+    const body = document.getElementById("recentBody");
+    body.innerHTML = "";
+    for (const r of rows) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${fmtTime(r.inicio_local)}</td>
+        <td>${fmtNum(r.duracion_min, 1)} min</td>
+        <td>${fmtNum(r.placas, 0)}</td>
+        <td>${r.programa || "-"}</td>
+        <td>${r.file_name || "-"}</td>
+      `;
+      body.appendChild(tr);
+    }
+  }
+
+  function renderHourChart(rows, targetPlates) {
+    const labels = rows.map(r => fmtTime(r.hora_local));
+    const values = rows.map(r => Number(r.placas || 0));
+
+    // objetivo por hora (9 horas netas)
+    const targetPerHour = (Number(targetPlates) || 50) / 9.0;
+
+    function colorFor(v) {
+      if (v >= targetPerHour) return "rgba(125, 255, 178, 0.55)";        // verde
+      if (v >= targetPerHour * 0.6) return "rgba(255, 210, 106, 0.55)";  // amarillo
+      return "rgba(255, 138, 150, 0.55)";                                // rojo
+    }
+    const colors = values.map(colorFor);
+
+    if (!hourChart) {
+      hourChart = new Chart(document.getElementById("hourChart"), {
+        type: "bar",
+        data: { labels, datasets: [{ label: "Placas", data: values, backgroundColor: colors }] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: {
+              beginAtZero: true,
+              suggestedMax: 8
+            }
+          }
+        },
+        plugins: [lunchBandPlugin]
+      });
+    } else {
+      hourChart.data.labels = labels;
+      hourChart.data.datasets[0].data = values;
+      hourChart.data.datasets[0].backgroundColor = colors;
+      hourChart.update();
+    }
+  }
+
+  function renderDayChart(rows) {
+    const labels = rows.map(r => r.dia);
+    const values = rows.map(r => Number(r.placas || 0));
+
+    if (!dayChart) {
+      dayChart = new Chart(document.getElementById("dayChart"), {
+        type: "line",
+        data: { labels, datasets: [{ label: "Placas/día", data: values, tension: 0.25 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+      });
+    } else {
+      dayChart.data.labels = labels;
+      dayChart.data.datasets[0].data = values;
+      dayChart.update();
+    }
+  }
+
+  function computePaceAndForecast(kpi) {
+    // ritmo vs objetivo a esta hora
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(7, 30, 0, 0);
+
+    let minutesElapsed = (now - start) / 60000;
+    minutesElapsed = Math.max(0, Math.min(540, minutesElapsed));
+
+    const expected = (minutesElapsed / 540) * Number(kpi.target_plates || 50);
+    const diff = Number(kpi.placas_hoy || 0) - expected;
+
+    // proyección cierre
+    let forecast = 0;
+    if (minutesElapsed > 30) {
+      const rate = Number(kpi.placas_hoy || 0) / minutesElapsed; // placas/min
+      forecast = rate * 540;
+    }
+
+    return { minutesElapsed, expected, diff, forecast };
+  }
+
+  function applyPaceUI(expected, diff) {
+    document.getElementById("expectedPlates").textContent = expected.toFixed(1);
+
+    const paceCard = document.getElementById("paceCard");
+    paceCard.classList.remove("ok","warn","bad");
+
+    if (diff >= 0) {
+      document.getElementById("paceValue").textContent = `+${diff.toFixed(1)} placas`;
+      paceCard.classList.add("ok");
+    } else if (diff >= -5) {
+      document.getElementById("paceValue").textContent = `${diff.toFixed(1)} placas`;
+      paceCard.classList.add("warn");
+    } else {
+      document.getElementById("paceValue").textContent = `${diff.toFixed(1)} placas`;
+      paceCard.classList.add("bad");
+    }
+  }
+
+  function applyForecastUI(forecast) {
+    document.getElementById("forecastValue").textContent =
+      (forecast && forecast > 0) ? `${forecast.toFixed(0)} placas` : "-";
+  }
+
+  // ===== Refresh loop =====
+  async function refreshAll() {
+    const [kpi, hourly, daily, recent] = await Promise.all([
+      loadKpi(), loadHourly(), loadDaily(), loadRecent()
+    ]);
+
+    if (!kpi) {
+      setStateCard("SIN_DATOS");
+      document.getElementById("updated").textContent = "Sin datos";
+      return;
+    }
+
+    document.getElementById("platesToday").textContent = fmtNum(kpi.placas_hoy, 0);
+    document.getElementById("plates60").textContent = fmtNum(kpi.placas_ult_60, 0);
+    document.getElementById("events60").textContent = fmtNum(kpi.eventos_ult_60, 0);
+    document.getElementById("eventsToday").textContent = fmtNum(kpi.eventos_hoy, 0);
+    document.getElementById("targetPlates").textContent = fmtNum(kpi.target_plates, 0);
+
+    document.getElementById("firstCut").textContent = fmtTime(kpi.primer_corte_local);
+    document.getElementById("lastCut").textContent = fmtTime(kpi.ultimo_corte_local);
+    document.getElementById("startDelay").textContent = fmtNum(kpi.demora_arranque_min, 0);
+
+    // min desde último corte
+    document.getElementById("minsSinceLast").textContent = fmtNum(kpi.min_desde_ultimo, 0);
+    setStateCard(kpi.estado);
+
+    // barra minutos corte
+    document.getElementById("cutMinsToday").textContent = fmtNum(kpi.minutos_corte_hoy, 0);
+    document.getElementById("minPerPlate").textContent = fmtNum(kpi.min_por_placa, 1);
+
+    const mins = Number(kpi.minutos_corte_hoy || 0);
+    const pct = Math.max(0, Math.min(100, (mins / 540) * 100));
+    document.getElementById("cutFill").style.width = pct + "%";
+    document.getElementById("utilPct").textContent = (mins / 540 * 100).toFixed(1);
+
+    // ritmo y forecast
+    const { expected, diff, forecast } = computePaceAndForecast(kpi);
+    applyPaceUI(expected, diff);
+    applyForecastUI(forecast);
+
+    // gráficos + tabla
+    renderHourChart(hourly, kpi.target_plates);
+    renderDayChart(daily);
+    renderRecent(recent);
+
+    document.getElementById("updated").textContent = new Date().toLocaleTimeString();
+  }
+
+  // Fullscreen
+  document.getElementById("fsBtn").addEventListener("click", () => {
+    const el = document.documentElement;
+    if (!document.fullscreenElement) el.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  });
+
+  // Countdown + watchdog
+  let secondsLeft = REFRESH_SEC;
+  document.getElementById("nextIn").textContent = secondsLeft;
+
+  setInterval(() => {
+    secondsLeft -= 1;
+    if (secondsLeft <= 0) secondsLeft = REFRESH_SEC;
+    document.getElementById("nextIn").textContent = secondsLeft;
+  }, 1000);
+
+  let lastUpdateTs = 0;
+
+  async function safeRefresh() {
+    try {
+      await refreshAll();
+      lastUpdateTs = Date.now();
+      secondsLeft = REFRESH_SEC;
+    } catch (e) {
+      console.error("refreshAll error:", e);
+      document.getElementById("updated").textContent = "Error cargando datos";
+      // no tocamos estado aquí; watchdog se encarga si queda trabado
+    }
+  }
+
+  setInterval(() => { safeRefresh(); }, REFRESH_SEC * 1000);
+
+  // watchdog: si pasan 2 ciclos sin actualizar, recarga
+  setInterval(() => {
+    if (lastUpdateTs && (Date.now() - lastUpdateTs) > (REFRESH_SEC * 2.2 * 1000)) {
+      location.reload();
+    }
+  }, 5000);
+
+  // primera carga
+  safeRefresh();
+</script>
+
+</body>
+</html>
