@@ -185,19 +185,19 @@
   </div>
 
   <!-- fila 2 -->
-  <div class="card span3">
+  <div class="card span2">
     <div class="k">Primer corte</div>
     <div class="v" id="firstCut">-</div>
     <div class="s">Demora arranque (vs 07:30): <span id="startDelay">-</span> min</div>
   </div>
 
-  <div class="card span3">
+  <div class="card span2">
     <div class="k">Último corte</div>
     <div class="v" id="lastCut">-</div>
     <div class="s">Eventos hoy: <span id="eventsToday">-</span></div>
   </div>
 
-  <div class="card span3">
+  <div class="card span2">
     <div class="k">Minutos de corte (hoy)</div>
     <div class="v"><span id="cutMinsToday">-</span> <span class="sub">/ 540</span></div>
     <div class="s">Promedio min/placa: <span id="minPerPlate">-</span></div>
@@ -229,20 +229,6 @@
     <div class="k">Últimos 30 días (placas/día)</div>
     <canvas id="dayChart"></canvas>
   </div>
-
-  <!-- tabla últimos cortes -->
-  <div class="card span6">
-    <div class="k">Últimos cortes</div>
-    <table>
-      <thead>
-        <tr>
-          <th>Inicio</th><th>Duración</th><th>Placas</th><th>Programa</th><th>Archivo</th>
-        </tr>
-      </thead>
-      <tbody id="recentBody"></tbody>
-    </table>
-  </div>
-</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
@@ -423,7 +409,7 @@
     let minutesElapsed = (now - start) / 60000;
     minutesElapsed = Math.max(0, Math.min(540, minutesElapsed));
 
-    const expected = (minutesElapsed / 540) * Number(kpi.target_plates || 50);
+    const expected = (minutesElapsed / 540) * Number(kpi.target_plates || 60);
     const diff = Number(kpi.placas_hoy || 0) - expected;
 
     // proyección cierre
@@ -553,3 +539,4 @@
 
 </body>
 </html>
+
