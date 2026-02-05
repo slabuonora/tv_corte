@@ -519,21 +519,128 @@
   }
 
   function renderDayChart(rows) {
-    const labels = rows.map(r => r.dia);
-    const values = rows.map(r => Number(r.placas || 0));
+  const labels = rows.map(r => r.dia); // YYYY-MM-DD
+  const values = rows.map(r => Number(r.placas || 0));
 
-    if (!dayChart) {
-      dayChart = new Chart(document.getElementById("dayChart"), {
-        type: "line",
-        data: { labels, datasets: [{ label: "Placas/día", data: values, tension: 0.25 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-      });
-    } else {
-      dayChart.data.labels = labels;
-      dayChart.data.datasets[0].data = values;
-      dayChart.update();
+  // === Cálculos ===
+  const avg30 =
+    values.length ? values.reduce((a,b)=>a+b,0) / values.length : 0;
+
+  // Últimos 7 días hábiles (excluye sáb/dom)
+  const last7 = [];
+  for (let i = values.length - 1; i >= 0 && last7.length < 7; i--) {
+    const d = new Date(labels[i]);
+    const day = d.getDay(); // 0=dom,6=sab
+    if (day !== 0 && day !== 6) {
+      last7.push(values[i]);
     }
   }
+  const avg7 =
+    last7.length ? last7.reduce((a,b)=>a+b,0) / last7.length : null;
+
+  const maxVal = values.length ? Math.max(...values) : null;
+
+  // ¿Récord hoy?
+  const isRecordToday =
+    values.length >= 2 && values[values.length - 1] >= maxVal;
+
+  // === Sombreado de fines de semana ===
+  const weekendBands = labels
+    .map((d, i) => {
+      const day = new Date(d).getDay();
+      return (day === 0 || day === 6)
+        ? { xMin: i - 0.5, xMax: i + 0.5 }
+        : null;
+    })
+    .filter(Boolean);
+
+  // === Cambiar estilo del panel si hay récord ===
+  const panel = document.querySelector('#dayChart').closest('.card');
+  panel.style.borderColor = isRecordToday ? '#f5c16c' : 'var(--border)';
+  panel.style.boxShadow = isRecordToday
+    ? '0 0 20px rgba(245,193,108,0.35)'
+    : 'none';
+
+  if (!dayChart) {
+    dayChart = new Chart(document.getElementById("dayChart"), {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Placas/día",
+            data: values,
+            tension: 0.25,
+            borderWidth: 2,
+            borderColor: "#2b8aeb",
+            pointRadius: 3,
+            pointBackgroundColor: "#2b8aeb"
+          },
+          {
+            label: "Media 30 días",
+            data: labels.map(() => avg30),
+            borderColor: "rgba(255,255,255,0.6)",
+            borderWidth: 1.5,
+            pointRadius: 0
+          },
+          avg7 !== null ? {
+            label: "Media última semana",
+            data: labels.map(() => avg7),
+            borderColor: "rgba(125,255,178,0.9)",
+            borderDash: [6,4],
+            borderWidth: 1.5,
+            pointRadius: 0
+          } : null,
+          maxVal !== null ? {
+            label: "Récord histórico",
+            data: labels.map(() => maxVal),
+            borderColor: "#f5c16c",
+            borderWidth: 1,
+            pointRadius: 0
+          } : null
+        ].filter(Boolean)
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          y: { beginAtZero: true }
+        }
+      },
+      plugins: [{
+        id: "weekendShading",
+        beforeDatasetsDraw(chart) {
+          const { ctx, chartArea, scales } = chart;
+          if (!chartArea) return;
+
+          ctx.save();
+          ctx.fillStyle = "rgba(255,255,255,0.04)";
+
+          weekendBands.forEach(b => {
+            const x1 = scales.x.getPixelForValue(b.xMin);
+            const x2 = scales.x.getPixelForValue(b.xMax);
+            ctx.fillRect(
+              x1,
+              chartArea.top,
+              x2 - x1,
+              chartArea.bottom - chartArea.top
+            );
+          });
+
+          ctx.restore();
+        }
+      }]
+    });
+  } else {
+    dayChart.data.labels = labels;
+    dayChart.data.datasets[0].data = values;
+    dayChart.update();
+  }
+}
+
 
   function computePaceAndForecast(kpi) {
     const now = new Date();
@@ -703,6 +810,7 @@ else gapEl.classList.add("bad");
 
 </body>
 </html>
+
 
 
 
