@@ -126,12 +126,24 @@
       border-radius:999px;
       overflow:hidden;
       margin-top:10px;
+      position: relative;   /* <- importante para capas */
     }
     .progress-fill {
       height:100%;
       width:0%;
       background:#2b8aeb;
       transition:width .35s ease;
+      position: absolute;
+      top: 0; left: 0;
+    }
+    /* Capa de tiempo transcurrido (amarillo claro) */
+    .progress-elapsed {
+      position: absolute;
+      top: 0; left: 0;
+      height: 100%;
+      width: 0%;
+      background: rgba(255, 210, 106, 0.45); /* amarillo suave */
+      transition: width .35s ease;
     }
 
     /* ===== RITMO (card coloreada) ===== */
@@ -196,7 +208,7 @@
     <div class="v" id="lastCut">-</div>
     <div class="s">Eventos hoy: <span id="eventsToday">-</span></div>
   </div>
-
+ <!--
   <div class="card span2"> 
     <div class="k">Minutos de corte (hoy)</div>
     <div class="v"><span id="cutMinsToday">-</span> <span class="sub">/ 540</span></div>
@@ -205,6 +217,31 @@
     <div class="s">Utilización corte: <span id="utilPct">-</span>%</div>
     <div class="glass-card col-2">
   </div>
+-->
+    <div class="card span2">
+  <div class="k">Utilización Efectiva</div>
+
+  <!-- Valor principal -->
+  <div class="v">
+    <span id="utilPctBig">-</span><span class="sub">%</span>
+  </div>
+
+  <!-- Dato menor -->
+  <div class="s">
+    Minutos: <span id="cutMinsToday">-</span> / 540 • Promedio min/placa: <span id="minPerPlate">-</span>
+  </div>
+
+  <!-- Barra doble: amarillo = tiempo transcurrido, azul = utilización real -->
+  <div class="progress">
+    <div class="progress-elapsed" id="elapsedFill"></div>
+    <div class="progress-fill" id="cutFill"></div>
+  </div>
+
+  <div class="s">
+    Transcurrido hoy: <span id="elapsedPct">-</span>%
+  </div>
+</div>
+
 
   <!-- fila 3 -->
   <div class="card span3" id="forecastCard">
@@ -554,10 +591,32 @@
     document.getElementById("cutMinsToday").textContent = fmtNum(kpi.minutos_corte_hoy, 0);
     document.getElementById("minPerPlate").textContent = fmtNum(kpi.min_por_placa, 1);
 
-    const mins = Number(kpi.minutos_corte_hoy || 0);
-    const pct = Math.max(0, Math.min(100, (mins / 540) * 100));
-    document.getElementById("cutFill").style.width = pct + "%";
-    document.getElementById("utilPct").textContent = (mins / 540 * 100).toFixed(1);
+    // ===== Utilización efectiva (real) =====
+const mins = Number(kpi.minutos_corte_hoy || 0);
+const utilPct = Math.max(0, Math.min(100, (mins / 540) * 100));
+
+document.getElementById("utilPctBig").textContent = utilPct.toFixed(1);
+document.getElementById("cutMinsToday").textContent = fmtNum(mins, 0);
+document.getElementById("minPerPlate").textContent = fmtNum(kpi.min_por_placa, 1);
+
+// Barra azul = utilización real
+document.getElementById("cutFill").style.width = utilPct + "%";
+
+// ===== Tiempo transcurrido del turno (amarillo) =====
+// Turno: 07:30 a 17:00 (540 min)
+const now = new Date();
+const shiftStart = new Date(now);
+shiftStart.setHours(7, 30, 0, 0);
+
+let elapsedMin = (now - shiftStart) / 60000;
+elapsedMin = Math.max(0, Math.min(540, elapsedMin));
+
+const elapsedPct = (elapsedMin / 540) * 100;
+
+// Barra amarilla = tiempo transcurrido
+document.getElementById("elapsedFill").style.width = elapsedPct + "%";
+document.getElementById("elapsedPct").textContent = elapsedPct.toFixed(0);
+
 
     const { expected, diff, forecast } = computePaceAndForecast(kpi);
     applyPaceUI(expected, diff);
@@ -613,6 +672,7 @@
 
 </body>
 </html>
+
 
 
 
