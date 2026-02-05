@@ -160,6 +160,14 @@
 
     /* Forecast card un poco destacada */
     #forecastCard { border-color:#2b3e55; }
+
+    /* Brecha (tiempo muerto) */
+  .gap { font-weight: 800; padding: 2px 8px; border-radius: 999px; }
+  .gap.ok { color: #00ff88; border: 1px solid rgba(0,255,136,0.35); background: rgba(0,255,136,0.08); }
+  .gap.warn { color: #ffcc00; border: 1px solid rgba(255,204,0,0.35); background: rgba(255,204,0,0.08); }
+  .gap.bad { color: #ff4d4d; border: 1px solid rgba(255,77,77,0.35); background: rgba(255,77,77,0.08); }
+
+    
   </style>
 </head>
 
@@ -240,6 +248,11 @@
   <div class="s">
     Transcurrido hoy: <span id="elapsedPct">-</span>%
   </div>
+      
+  <div class="s">
+    Brecha (tiempo muerto): <span id="gapMins" class="gap ok">-</span>
+</div>
+
 </div>
 
 
@@ -331,7 +344,7 @@
       const xScale = scales.x;
       const x = xScale.getPixelForValue(idx);
       const nextX = xScale.getPixelForValue(Math.min(idx + 1, labels.length - 1));
-      const w = Math.max(8, (nextX - x) / 2);
+      const w = Math.max(8, (nextX - x) / 8);
 
       ctx.save();
       ctx.fillStyle = "rgba(255, 210, 106, 0.16)";
@@ -629,6 +642,22 @@ document.getElementById("elapsedPct").textContent = elapsedPct.toFixed(0);
     document.getElementById("updated").textContent = new Date().toLocaleTimeString();
   }
 
+  // ===== Brecha / tiempo muerto estimado =====
+const gap = Math.max(0, elapsedMin - mins);   // min "sin cortar" dentro del turno
+const gapEl = document.getElementById("gapMins");
+
+gapEl.textContent = `${gap.toFixed(0)} min`;
+gapEl.classList.remove("ok","warn","bad");
+
+// Umbrales sugeridos (ajustables):
+// - OK: hasta 90 min de brecha (inicio, setups, etc.)
+// - Warn: 90 a 180
+// - Bad: más de 180
+if (gap <= 90) gapEl.classList.add("ok");
+else if (gap <= 180) gapEl.classList.add("warn");
+else gapEl.classList.add("bad");
+
+
   // Fullscreen
   document.getElementById("fsBtn").addEventListener("click", () => {
     const el = document.documentElement;
@@ -672,6 +701,7 @@ document.getElementById("elapsedPct").textContent = elapsedPct.toFixed(0);
 
 </body>
 </html>
+
 
 
 
