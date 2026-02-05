@@ -197,12 +197,18 @@
     <div class="s">Eventos hoy: <span id="eventsToday">-</span></div>
   </div>
 
-  <div class="card span2">
+  <div class="card span2"> <!--
     <div class="k">Minutos de corte (hoy)</div>
     <div class="v"><span id="cutMinsToday">-</span> <span class="sub">/ 540</span></div>
     <div class="s">Promedio min/placa: <span id="minPerPlate">-</span></div>
     <div class="progress"><div class="progress-fill" id="cutFill"></div></div>
     <div class="s">Utilización corte: <span id="utilPct">-</span>%</div>
+    <div class="glass-card col-2">-->
+    <div class="k">Utilización efectiva</div>
+    <div class="v small" id="utilPct">0<span class="unit">%</span></div>
+    <div class="progress-container"><div class="progress-bar" id="cutFill"></div></div>
+    <div class="s"><span id="cutMinsToday">0</span> / 540 min</div>
+  </div>
   </div>
 
   <!-- fila 3 -->
@@ -230,7 +236,9 @@
     <canvas id="dayChart"></canvas>
   </div>
 
+  
   <!-- últimos cortes (tu JS lo usa; lo dejamos para no romper nada) -->
+  <!--
   <div class="card span6">
     <div class="k">Últimos cortes</div>
     <table>
@@ -242,6 +250,7 @@
       <tbody id="recentBody"></tbody>
     </table>
   </div>
+  -->
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -609,3 +618,4 @@
 
 </body>
 </html>
+
