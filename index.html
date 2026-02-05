@@ -344,7 +344,7 @@
       const xScale = scales.x;
       const x = xScale.getPixelForValue(idx);
       const nextX = xScale.getPixelForValue(Math.min(idx + 1, labels.length - 1));
-      const w = Math.max(8, (nextX - x) / 8);
+      const w = Math.max(1, (nextX - x) / 10);
 
       ctx.save();
       ctx.fillStyle = "rgba(255, 210, 106, 0.16)";
@@ -703,6 +703,7 @@ else gapEl.classList.add("bad");
 
 </body>
 </html>
+
 
 
 
