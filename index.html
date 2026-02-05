@@ -517,6 +517,12 @@
       hourChart.update();
     }
   }
+  
+  function parseLocalDate(ymd) {
+    // ymd = "YYYY-MM-DD"
+    const [y, m, d] = ymd.split("-").map(Number);
+    return new Date(y, m - 1, d); // <-- fecha LOCAL, sin UTC
+  }
 
   function renderDayChart(rows) {
   const labels = rows.map(r => r.dia); // YYYY-MM-DD
@@ -547,7 +553,7 @@
   // === Sombreado de fines de semana ===
   const weekendBands = labels
     .map((d, i) => {
-      const day = new Date(d).getDay();
+      const day = parseLocalDate(d).getDay();
       return (day === 0 || day === 6)
         ? { xMin: i - 0.5, xMax: i + 0.5 }
         : null;
@@ -810,6 +816,7 @@ else gapEl.classList.add("bad");
 
 </body>
 </html>
+
 
 
 
