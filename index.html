@@ -212,7 +212,7 @@
     <div class="s">Si mantenemos el ritmo actual</div>
   </div>
 
-    <div class="card span3" id="paceCard">
+  <div class="card span3" id="paceCard">
     <div class="k">Ritmo vs objetivo</div>
     <div class="v" id="paceValue">-</div>
     <div class="s">Esperado a esta hora: <span id="expectedPlates">-</span></div>
@@ -220,7 +220,7 @@
 
   <!-- gráfico por hora (ancho completo) -->
   <div class="card span6">
-    <div class="k">Placas por hora (hoy)</div>
+    <div class="k">Placas por hora (hoy) + baseline histórico</div>
     <canvas id="hourChart"></canvas>
   </div>
 
@@ -229,6 +229,20 @@
     <div class="k">Últimos 30 días (placas/día)</div>
     <canvas id="dayChart"></canvas>
   </div>
+
+  <!-- últimos cortes (tu JS lo usa; lo dejamos para no romper nada) -->
+  <div class="card span6">
+    <div class="k">Últimos cortes</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Inicio</th><th>Duración</th><th>Placas</th><th>Programa</th><th>Archivo</th>
+        </tr>
+      </thead>
+      <tbody id="recentBody"></tbody>
+    </table>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
@@ -239,6 +253,10 @@
   const SUPABASE_ANON_KEY = "sb_publishable_Agu_I1nw4mY1qRARQBbaHQ_6lTWsFTh";
   const MACHINE_ID = "CORTE_1";
   const REFRESH_SEC = 20;
+
+  // Baseline: "median" (recomendado) o "avg"
+  const BASELINE_MODE = "median";   // "median" | "avg"
+  const BASELINE_DAYS = 60;
   // ====================
 
   document.getElementById("machine").textContent = `(${MACHINE_ID})`;
@@ -259,13 +277,12 @@
   }
 
   // ===== Chart plugins =====
-  // Marca el almuerzo desde 12:00 a 12:30 (media barra)
+  // Banda almuerzo 12:00–12:30 (media barra)
   const lunchBandPlugin = {
     id: "lunchBand",
     beforeDatasetsDraw(chart) {
       const { ctx, chartArea, scales } = chart;
       if (!chartArea) return;
-
       const labels = chart.data.labels || [];
       const idx = labels.findIndex(l => l === "12:00");
       if (idx < 0) return;
@@ -273,7 +290,7 @@
       const xScale = scales.x;
       const x = xScale.getPixelForValue(idx);
       const nextX = xScale.getPixelForValue(Math.min(idx + 1, labels.length - 1));
-      const w = Math.max(8, (nextX - x) / 2); // 30 min aprox
+      const w = Math.max(8, (nextX - x) / 2);
 
       ctx.save();
       ctx.fillStyle = "rgba(255, 210, 106, 0.16)";
@@ -282,15 +299,54 @@
     }
   };
 
+  // Plugin: dibujar tick horizontal por barra con baseline histórico
+  function makeBaselineTickPlugin(getBaselineVals) {
+    return {
+      id: "baselineTicks",
+      afterDatasetsDraw(chart) {
+        const baseline = getBaselineVals();
+        if (!baseline || !baseline.length) return;
+
+        const meta = chart.getDatasetMeta(0);
+        if (!meta || !meta.data) return;
+
+        const yScale = chart.scales.y;
+        const ctx = chart.ctx;
+
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.65)";
+        ctx.lineWidth = 2;
+
+        for (let i = 0; i < meta.data.length; i++) {
+          const b = baseline[i];
+          if (b === null || b === undefined) continue;
+
+          const barEl = meta.data[i];
+          const x = barEl.x;
+          const w = barEl.width || 18;
+          const y = yScale.getPixelForValue(b);
+
+          ctx.beginPath();
+          ctx.moveTo(x - w * 0.45, y);
+          ctx.lineTo(x + w * 0.45, y);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+    };
+  }
+
   let hourChart = null;
   let dayChart = null;
+  let baselineValsForPlugin = [];
+  const baselinePlugin = makeBaselineTickPlugin(() => baselineValsForPlugin);
 
   function setStateCard(state) {
     const card = document.getElementById("stateCard");
     const text = document.getElementById("stateText");
 
     card.classList.remove("verde","amarillo","rojo");
-    // mantener clases base
     if (!state || state === "SIN_DATOS") {
       text.textContent = "-";
       return;
@@ -327,6 +383,11 @@
     if (error) throw error;
     return data || [];
   }
+  async function loadBaseline() {
+    const { data, error } = await sb.rpc("fn_hourly_baseline", { p_machine_id: MACHINE_ID, p_days: BASELINE_DAYS });
+    if (error) throw error;
+    return data || [];
+  }
 
   function renderRecent(rows) {
     const body = document.getElementById("recentBody");
@@ -344,7 +405,7 @@
     }
   }
 
-  function renderHourChart(rows, targetPlates) {
+  function renderHourChart(rows, targetPlates, baselineRows) {
     const labels = rows.map(r => fmtTime(r.hora_local));
     const values = rows.map(r => Number(r.placas || 0));
 
@@ -352,28 +413,48 @@
     const targetPerHour = (Number(targetPlates) || 50) / 9.0;
 
     function colorFor(v) {
-      if (v >= targetPerHour) return "rgba(125, 255, 178, 0.55)";        // verde
-      if (v >= targetPerHour * 0.6) return "rgba(255, 210, 106, 0.55)";  // amarillo
-      return "rgba(255, 138, 150, 0.55)";                                // rojo
+      if (v >= targetPerHour) return "rgba(125, 255, 178, 0.55)";
+      if (v >= targetPerHour * 0.6) return "rgba(255, 210, 106, 0.55)";
+      return "rgba(255, 138, 150, 0.55)";
     }
     const colors = values.map(colorFor);
+
+    // Baseline map por hora del día (0-23)
+    const baseMap = new Map((baselineRows || []).map(r => {
+      const val = (BASELINE_MODE === "avg")
+        ? Number(r.avg_plates ?? 0)
+        : Number(r.median_plates ?? r.avg_plates ?? 0);
+      return [Number(r.hour_of_day), val];
+    }));
+
+    // baseline por cada barra (según hora local)
+    baselineValsForPlugin = rows.map(r => {
+      const d = new Date(r.hora_local);
+      const h = d.getHours();
+      return baseMap.has(h) ? baseMap.get(h) : null;
+    });
 
     if (!hourChart) {
       hourChart = new Chart(document.getElementById("hourChart"), {
         type: "bar",
-        data: { labels, datasets: [{ label: "Placas", data: values, backgroundColor: colors }] },
+        data: {
+          labels,
+          datasets: [{
+            label: "Placas",
+            data: values,
+            backgroundColor: colors,
+            borderRadius: 6
+          }]
+        },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
-            y: {
-              beginAtZero: true,
-              suggestedMax: 8
-            }
+            y: { beginAtZero: true, suggestedMax: 8 }
           }
         },
-        plugins: [lunchBandPlugin]
+        plugins: [lunchBandPlugin, baselinePlugin]
       });
     } else {
       hourChart.data.labels = labels;
@@ -401,7 +482,6 @@
   }
 
   function computePaceAndForecast(kpi) {
-    // ritmo vs objetivo a esta hora
     const now = new Date();
     const start = new Date(now);
     start.setHours(7, 30, 0, 0);
@@ -412,13 +492,11 @@
     const expected = (minutesElapsed / 540) * Number(kpi.target_plates || 60);
     const diff = Number(kpi.placas_hoy || 0) - expected;
 
-    // proyección cierre
     let forecast = 0;
     if (minutesElapsed > 30) {
-      const rate = Number(kpi.placas_hoy || 0) / minutesElapsed; // placas/min
+      const rate = Number(kpi.placas_hoy || 0) / minutesElapsed;
       forecast = rate * 540;
     }
-
     return { minutesElapsed, expected, diff, forecast };
   }
 
@@ -445,10 +523,9 @@
       (forecast && forecast > 0) ? `${forecast.toFixed(0)} placas` : "-";
   }
 
-  // ===== Refresh loop =====
   async function refreshAll() {
-    const [kpi, hourly, daily, recent] = await Promise.all([
-      loadKpi(), loadHourly(), loadDaily(), loadRecent()
+    const [kpi, hourly, daily, recent, baseline] = await Promise.all([
+      loadKpi(), loadHourly(), loadDaily(), loadRecent(), loadBaseline()
     ]);
 
     if (!kpi) {
@@ -467,11 +544,9 @@
     document.getElementById("lastCut").textContent = fmtTime(kpi.ultimo_corte_local);
     document.getElementById("startDelay").textContent = fmtNum(kpi.demora_arranque_min, 0);
 
-    // min desde último corte
     document.getElementById("minsSinceLast").textContent = fmtNum(kpi.min_desde_ultimo, 0);
     setStateCard(kpi.estado);
 
-    // barra minutos corte
     document.getElementById("cutMinsToday").textContent = fmtNum(kpi.minutos_corte_hoy, 0);
     document.getElementById("minPerPlate").textContent = fmtNum(kpi.min_por_placa, 1);
 
@@ -480,13 +555,11 @@
     document.getElementById("cutFill").style.width = pct + "%";
     document.getElementById("utilPct").textContent = (mins / 540 * 100).toFixed(1);
 
-    // ritmo y forecast
     const { expected, diff, forecast } = computePaceAndForecast(kpi);
     applyPaceUI(expected, diff);
     applyForecastUI(forecast);
 
-    // gráficos + tabla
-    renderHourChart(hourly, kpi.target_plates);
+    renderHourChart(hourly, kpi.target_plates, baseline);
     renderDayChart(daily);
     renderRecent(recent);
 
@@ -520,24 +593,19 @@
     } catch (e) {
       console.error("refreshAll error:", e);
       document.getElementById("updated").textContent = "Error cargando datos";
-      // no tocamos estado aquí; watchdog se encarga si queda trabado
     }
   }
 
   setInterval(() => { safeRefresh(); }, REFRESH_SEC * 1000);
 
-  // watchdog: si pasan 2 ciclos sin actualizar, recarga
   setInterval(() => {
     if (lastUpdateTs && (Date.now() - lastUpdateTs) > (REFRESH_SEC * 2.2 * 1000)) {
       location.reload();
     }
   }, 5000);
 
-  // primera carga
   safeRefresh();
 </script>
 
 </body>
 </html>
-
-
