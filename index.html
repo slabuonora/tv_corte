@@ -630,19 +630,7 @@ const elapsedPct = (elapsedMin / 540) * 100;
 document.getElementById("elapsedFill").style.width = elapsedPct + "%";
 document.getElementById("elapsedPct").textContent = elapsedPct.toFixed(0);
 
-
-    const { expected, diff, forecast } = computePaceAndForecast(kpi);
-    applyPaceUI(expected, diff);
-    applyForecastUI(forecast);
-
-    renderHourChart(hourly, kpi.target_plates, baseline);
-    renderDayChart(daily);
-    renderRecent(recent);
-
-    document.getElementById("updated").textContent = new Date().toLocaleTimeString();
-  }
-
-  // ===== Brecha / tiempo muerto estimado =====
+      // ===== Brecha / tiempo muerto estimado =====
 const gap = Math.max(0, elapsedMin - mins);   // min "sin cortar" dentro del turno
 const gapEl = document.getElementById("gapMins");
 
@@ -656,6 +644,20 @@ gapEl.classList.remove("ok","warn","bad");
 if (gap <= 90) gapEl.classList.add("ok");
 else if (gap <= 180) gapEl.classList.add("warn");
 else gapEl.classList.add("bad");
+
+
+    const { expected, diff, forecast } = computePaceAndForecast(kpi);
+    applyPaceUI(expected, diff);
+    applyForecastUI(forecast);
+
+    renderHourChart(hourly, kpi.target_plates, baseline);
+    renderDayChart(daily);
+    renderRecent(recent);
+
+    document.getElementById("updated").textContent = new Date().toLocaleTimeString();
+  }
+
+
 
 
   // Fullscreen
@@ -701,6 +703,7 @@ else gapEl.classList.add("bad");
 
 </body>
 </html>
+
 
 
 
